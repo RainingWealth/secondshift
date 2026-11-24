@@ -5,3 +5,8 @@
 - Found: CNY_DSC06384 (Drive 10-uOvg4U5yv8v-RJZMjpZkQmpKlmvO0-) = beige bamboo bag + 4 cans in front (the "something like that" reference shot).
 - Checked, NOT heroes: BCC07185 (burgundy velvet), 07194, 07200, DSC06368 (round Thank You), DSC02247/49/51/55 (amber acrylic box, 4 colours).
 - STILL MISSING: three-colour bags (beige/red/pink) shot, and 大发羊财 red window box with 雪蛤/燕窝/鸡精/abalone.
+- heroA gen1 gen_fd2fdb84-c6dc-4d3b-97ba-a5b618799eef (composite of DSC02222/23/20 + cans 02209/15/08/11, P2 props)
+- heroA bags-only gen gen_7faf5f46-dc9c-4bbd-8b4f-648b2edc2efa; restore.py bags + place_front.py cans (deterministic, AI never touches cans)
+- heroA bags-only gen gen_7faf5f46-dc9c-4bbd-8b4f-648b2edc2efa; restore.py bags + place_front.py cans (AI never touches cans). Run scripts from cny27/work (layout paths relative).
+- LIMITATION: only v1 composites (stock room + couplets) exist for ~69 SKUs; Photoroom remove-background on them sometimes keeps stock-background junk (wine display at left) - cutclean.py x-range crop handles narrow items (cans); wide boxes may need manual masks. Clean originals would fix this.
+- Photoroom restage re-renders products (garbles labels). Always run restore.py (single product) or composite originals after (place_front.py).
