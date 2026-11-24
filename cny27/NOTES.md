@@ -11,3 +11,4 @@
 - LIMITATION: only v1 composites (stock room + couplets) exist for ~69 SKUs; Photoroom remove-background on them sometimes keeps stock-background junk (wine display at left) - cutclean.py x-range crop handles narrow items (cans); wide boxes may need manual masks. Clean originals would fix this.
 - Photoroom restage re-renders products (garbles labels). Always run restore.py (single product) or composite originals after (place_front.py).
 - v2.1: place_front.py now grades/shadows/grains the pasted cans (Ray: cans looked unnatural in v2.0). Rest of hero A look approved.
+- v2.2: cans' lid ellipse flattened (squash_lid) to match bag camera height, footprint ellipse + contact AO so cans sit on table, scene colour transfer (Reinhard 0.38) + desaturate. Per Ray: cans looked tilted forward and too punchy.
