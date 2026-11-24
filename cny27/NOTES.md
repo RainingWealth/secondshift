@@ -10,3 +10,4 @@
 - heroA bags-only gen gen_7faf5f46-dc9c-4bbd-8b4f-648b2edc2efa; restore.py bags + place_front.py cans (AI never touches cans). Run scripts from cny27/work (layout paths relative).
 - LIMITATION: only v1 composites (stock room + couplets) exist for ~69 SKUs; Photoroom remove-background on them sometimes keeps stock-background junk (wine display at left) - cutclean.py x-range crop handles narrow items (cans); wide boxes may need manual masks. Clean originals would fix this.
 - Photoroom restage re-renders products (garbles labels). Always run restore.py (single product) or composite originals after (place_front.py).
+- v2.1: place_front.py now grades/shadows/grains the pasted cans (Ray: cans looked unnatural in v2.0). Rest of hero A look approved.
