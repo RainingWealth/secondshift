@@ -117,12 +117,27 @@ for i, ch in enumerate(txt):
     gl = gl.resize((int(gl.width*SX), int(gl.height*SY)), Image.LANCZOS)
     M.paste(255, (int(x_start+i*step-gl.width/2), int(ty+size*SY/2-gl.height/2)), gl)
 gm = ink(np.array(M))
-sdw = cv2.GaussianBlur(np.roll(np.roll(gm, 6, 0), 5, 1), (0, 0), 6)[..., None]*0.35
-cv = cv*(1-sdw) + np.array([60, 30, 20])*sdw
-tone = 1 + cv2.GaussianBlur(rng.normal(0, 1, (H, W)).astype(np.float32), (0, 0), 14)[..., None]*0.10
-dark = np.clip(cv2.GaussianBlur(gm, (0, 0), 2)-cv2.GaussianBlur(gm, (0, 0), 7), 0, 1)[..., None]   # wet-ink pooling at the edge
-inkc = col*tone*(1-0.25*dark)
-cv = cv*(1-gm[..., None]) + inkc*gm[..., None]
+if E_('GOLD', '1') == '1':
+    core = (gm > 0.3).astype(np.uint8)
+    ow = int(E_('OUTW', 11))
+    outl = cv2.GaussianBlur(cv2.dilate(core, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ow, ow))).astype(np.float32), (0, 0), 1.0)
+    halo = cv2.GaussianBlur(cv2.dilate(core, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (45, 45))).astype(np.float32), (0, 0), 22)[..., None]*0.38
+    cv = cv*(1-halo) + np.array([70, 14, 14])*halo                                   # darken the wall behind the lettering
+    sdw = cv2.GaussianBlur(np.roll(np.roll(outl, 7, 0), 6, 1), (0, 0), 6)[..., None]*0.55
+    cv = cv*(1-sdw) + np.array([30, 6, 6])*sdw
+    cv = cv*(1-outl[..., None]) + np.array([112, 10, 20])*outl[..., None]            # deep crimson outline
+    ys_, xs_ = np.where(core > 0); y0_, y1_ = ys_.min(), ys_.max()
+    t = np.clip((np.arange(H)-y0_)/max(y1_-y0_, 1), 0, 1)[:, None, None]
+    gold = ((1-t)*np.array([255, 236, 140]) + t*np.array([214, 142, 22]))
+    gold = np.clip(np.broadcast_to(gold, (H, W, 3)) + np.exp(-((t-0.3)/0.08)**2)*45, 0, 255).astype(np.float32)
+    gold = gold*(1-0.12*np.clip(cv2.GaussianBlur(rng.normal(0, 1, (H, W)).astype(np.float32), (0, 0), 6), -1, 1)[..., None])
+    cv = cv*(1-gm[..., None]) + gold*gm[..., None]
+else:
+    sdw = cv2.GaussianBlur(np.roll(np.roll(gm, 6, 0), 5, 1), (0, 0), 6)[..., None]*0.35
+    cv = cv*(1-sdw) + np.array([60, 30, 20])*sdw
+    tone = 1 + cv2.GaussianBlur(rng.normal(0, 1, (H, W)).astype(np.float32), (0, 0), 14)[..., None]*0.10
+    dark = np.clip(cv2.GaussianBlur(gm, (0, 0), 2)-cv2.GaussianBlur(gm, (0, 0), 7), 0, 1)[..., None]
+    cv = cv*(1-gm[..., None]) + (col*tone*(1-0.25*dark))*gm[..., None]
 canvas = Image.fromarray(np.clip(cv, 0, 255).astype(np.uint8)).convert('RGBA')
 canvas.convert('RGB').save(out, quality=92)
 print((pw, ph), (px, py))
