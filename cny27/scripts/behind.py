@@ -16,8 +16,15 @@ for r in (E_('FIX') or '').split(';'):
     ip += rng.normal(0, 2.5, ip.shape); mf = cv2.GaussianBlur(mk.astype(np.float32)/255, (0, 0), 6)[..., None]
     bg = (bg.astype(np.float32)*(1-mf) + ip*mf).clip(0, 255).astype(np.uint8)
 h = Image.open(hp).convert('RGBA'); h = h.crop(h.getchannel('A').getbbox())
-hw = int(E_('HW', 600)); h = h.resize((hw, int(h.height*hw/h.width)), Image.LANCZOS)
-h = h.rotate(float(E_('TILT', 16)), resample=Image.BICUBIC, expand=True)
+if E_('UPRIGHT', '1') == '1': h = h.rotate(-90, expand=True)           # photo was shot lying on its side: stand it upright
+hh = int(E_('HH', 520)); h = h.resize((int(h.width*hh/h.height), hh), Image.LANCZOS)
+top = float(E_('TOP', 1.10))                                           # lean toward the camera: top edge larger than the base
+if top != 1.0:
+    w0, h0 = h.size; nw = int(w0*top); pad = (nw-w0)//2
+    src = np.float32([[0, 0], [w0, 0], [w0, h0], [0, h0]]); dst = np.float32([[0, 0], [nw, 0], [nw-pad, h0], [pad, h0]])
+    M_ = cv2.getPerspectiveTransform(src, dst)
+    h = Image.fromarray(cv2.warpPerspective(np.array(h), M_, (nw, h0), flags=cv2.INTER_CUBIC, borderValue=(0, 0, 0, 0)))
+if float(E_('TILT', 0)): h = h.rotate(float(E_('TILT', 0)), resample=Image.BICUBIC, expand=True)
 a = np.array(h).astype(np.float32); al = a[..., 3]; rgb = a[..., :3]
 # blend into the scene: warm/crimson grade, haze toward the wall, softer contrast, depth blur
 wall = bg[250:420, 300:1250].reshape(-1, 3).mean(0)
