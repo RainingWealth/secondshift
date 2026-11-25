@@ -76,13 +76,46 @@ over(rgb, al, px, py)
 ao = cv2.GaussianBlur(fm, (0, 0), 2.5)*0.35
 canvas = canvas*(1-ao[..., None]) + np.array([40, 20, 8])*ao[..., None]
 canvas = Image.fromarray(np.clip(canvas, 0, 255).astype(np.uint8)).convert('RGBA')
-# caption on top
-f = ImageFont.truetype('/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc', int(E_('CAP_SZ', 120)))
-txt = '喜气羊羊'; d = ImageDraw.Draw(canvas)
-tw = d.textlength(txt, font=f); tx = (W-tw)/2+int(E_('CAP_DX', 0)); ty = int(E_('CAP_Y', 50))
-lay = Image.new('RGBA', (W, H), (0, 0, 0, 0)); dl = ImageDraw.Draw(lay)
-dl.text((tx+3, ty+5), txt, font=f, fill=(70, 15, 10, 150), stroke_width=4, stroke_fill=(70, 15, 10, 150))
-canvas.alpha_composite(lay.filter(ImageFilter.GaussianBlur(4)))
-ImageDraw.Draw(canvas).text((tx, ty), txt, font=f, fill=(190, 24, 32), stroke_width=5, stroke_fill=(236, 190, 90))
+# caption on top: festive brush lettering, bounced/tilted, gold gradient + crimson outline + glow
+fpath = E_('FONT', '/home/user/secondshift/cny27/work/fonts/MaShanZheng-Regular.ttf')
+size = int(E_('CAP_SZ', 190)); txt = '喜气羊羊'
+f = ImageFont.truetype(fpath, size)
+ty = int(E_('CAP_Y', 20)); cx = W/2 + int(E_('CAP_DX', 0))
+tilts = [-7, 5, -4, 8]; dys = [10, -14, 4, -8]; scl = [1.05, 0.95, 1.0, 1.08]
+step = size*0.80; n = len(txt); x_start = cx - step*(n-1)/2
+glyphs = []
+for i, ch in enumerate(txt):
+    g = Image.new('L', (size*2, size*2), 0); gd = ImageDraw.Draw(g)
+    bb = gd.textbbox((0, 0), ch, font=f); gd.text((size-(bb[0]+bb[2])/2, size-(bb[1]+bb[3])/2), ch, font=f, fill=255)
+    g = g.resize((int(g.width*scl[i]), int(g.height*scl[i])), Image.LANCZOS).rotate(tilts[i], resample=Image.BICUBIC, expand=False)
+    glyphs.append((g, int(x_start+i*step), ty+size//2+dys[i]))
+mask = Image.new('L', (W, H), 0)
+for g, gx, gy in glyphs:
+    mask.paste(255, (gx-g.width//2, gy-g.height//2), g)
+m = np.array(mask)
+# gold gradient fill (bright top -> deep gold bottom) with a highlight band
+ys_, xs_ = np.where(m > 0); y0_, y1_ = ys_.min(), ys_.max()
+t = np.clip((np.arange(H)-y0_)/(y1_-y0_), 0, 1)[:, None, None]
+gold = (1-t)*np.array([255, 238, 150]) + t*np.array([222, 150, 30])
+gold = np.broadcast_to(gold, (H, W, 3)).astype(np.float32)
+band = np.exp(-((t-0.38)/0.07)**2)*60; gold = np.clip(gold+band, 0, 255)
+sm = np.array(mask).astype(np.float32)/255
+red = cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17)))   # crimson outline
+gl = cv2.GaussianBlur(cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (41, 41))).astype(np.float32)/255, (0, 0), 14)
+cv = np.array(canvas.convert('RGB')).astype(np.float32)
+sd = cv2.GaussianBlur(np.roll(np.roll(red, 10, 0), 8, 1).astype(np.float32)/255, (0, 0), 7)[..., None]*0.65
+cv = cv*(1-sd) + np.array([50, 8, 8])*sd                                      # drop shadow
+cv = cv + gl[..., None]*np.array([255, 190, 70])*0.55                          # warm glow
+ra = (cv2.GaussianBlur(red.astype(np.float32)/255, (0, 0), 0.8))[..., None]
+cv = cv*(1-ra) + np.array([172, 14, 24])*ra                                    # outline
+inner = cv2.erode(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
+gm = cv2.GaussianBlur(inner.astype(np.float32)/255, (0, 0), 0.8)[..., None]
+cv = cv*(1-gm) + gold*gm
+cv = np.clip(cv, 0, 255)
+canvas = Image.fromarray(cv.astype(np.uint8)).convert('RGBA')
+# sparkles
+dr = ImageDraw.Draw(canvas)
+for (sx, sy, r) in [(cx-step*1.9, ty+40, 22), (cx+step*1.9, ty+30, 26), (cx+step*1.2, ty+size*0.95, 14), (cx-step*1.2, ty+size*0.9, 16)]:
+    dr.polygon([(sx, sy-r), (sx+r*0.22, sy-r*0.22), (sx+r, sy), (sx+r*0.22, sy+r*0.22), (sx, sy+r), (sx-r*0.22, sy+r*0.22), (sx-r, sy), (sx-r*0.22, sy-r*0.22)], fill=(255, 244, 190))
 canvas.convert('RGB').save(out, quality=92)
 print((pw, ph), (px, py))
