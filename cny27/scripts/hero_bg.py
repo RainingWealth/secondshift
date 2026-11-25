@@ -81,7 +81,7 @@ rng = np.random.default_rng(11)
 fpath = E_('FONT', '/home/user/secondshift/cny27/work/fonts/MaShanZheng-Regular.ttf')
 size = int(E_('CAP_SZ', 250)); txt = '喜气羊羊'; f = ImageFont.truetype(fpath, size)
 ty = int(E_('CAP_Y', 20)); cx = W/2 + int(E_('CAP_DX', 0)); step = size*float(E_('CAP_STEP', 0.78))
-cols_ = [(176, 18, 28), (158, 106, 22), (176, 18, 28), (158, 106, 22)] if E_('CAP_MIX', '1') == '1' else [(176, 18, 28)]*4
+cols_ = [(200, 20, 30), (24, 122, 70), (238, 112, 8), (200, 20, 30)] if E_('CAP_MIX', '1') == '1' else [(200, 20, 30)]*4
 cv = np.array(canvas.convert('RGB')).astype(np.float32)
 def dry(mask):
     mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (int(E_('BOLD', 9)),)*2))   # thicken strokes like the reference
@@ -99,12 +99,20 @@ for i, ch in enumerate(txt):
     g = Image.new('L', (W, H), 0); gd = ImageDraw.Draw(g)
     bb = gd.textbbox((0, 0), ch, font=f)
     gd.text((x_start+i*step-(bb[0]+bb[2])/2, ty+size/2-(bb[1]+bb[3])/2), ch, font=f, fill=255)
-    gm = dry(np.array(g))
+    gm = dry(np.array(g)); g0 = np.array(g) > 128
+    near = cv2.dilate(g0.astype(np.uint8), np.ones((int(size*0.35),)*2, np.uint8)) & (1-cv2.dilate(g0.astype(np.uint8), np.ones((11, 11), np.uint8)))
+    yy_, xx_ = np.where(near > 0); sp = np.zeros((H, W), np.uint8)
+    if len(yy_):
+        for k in rng.choice(len(yy_), 16, replace=False):
+            cv2.circle(sp, (int(xx_[k]), int(yy_[k])), int(rng.choice([1, 2, 2, 3, 4])), 255, -1)
+    gm = np.maximum(gm, cv2.GaussianBlur(sp.astype(np.float32)/255, (0, 0), 0.7))
+    rim = np.clip(cv2.GaussianBlur(g0.astype(np.float32), (0, 0), 1.5) - cv2.GaussianBlur(g0.astype(np.float32), (0, 0), 5), 0, 1)
     # soft wall shadow, then flat ink with slight tonal variation
     sdw = cv2.GaussianBlur(np.roll(np.roll(gm, 5, 0), 4, 1), (0, 0), 5)[..., None]*0.35
     cv = cv*(1-sdw) + np.array([60, 30, 20])*sdw
     tone = 1 + cv2.GaussianBlur(rng.normal(0, 1, (H, W)).astype(np.float32), (0, 0), 14)[..., None]*0.10
-    cv = cv*(1-gm[..., None]) + (np.array(cols_[i], np.float32)*tone)*gm[..., None]
+    inkc = np.array(cols_[i], np.float32)*tone*(1-0.22*rim[..., None])
+    cv = cv*(1-gm[..., None]) + inkc*gm[..., None]
 canvas = Image.fromarray(np.clip(cv, 0, 255).astype(np.uint8)).convert('RGBA')
 dr = ImageDraw.Draw(canvas)
 sub = E_('CAP_SUB', 'GOOD  LUCK  ·  YEAR OF THE GOAT 2027')
