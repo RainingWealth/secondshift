@@ -27,6 +27,7 @@ white = (im.min(2) > 242).astype(np.uint8); bgmask = np.zeros_like(white)
 for p in [(0,0),(im.shape[1]-1,0),(0,im.shape[0]-1),(im.shape[1]-1,im.shape[0]-1)]:
     t = white.copy(); mm = np.zeros((im.shape[0]+2, im.shape[1]+2), np.uint8); cv2.floodFill(t, mm, p, 2, flags=4)
     bgmask |= (t == 2).astype(np.uint8)
+if E_('ALLWHITE'): bgmask = white
 alpha = (1-bgmask).astype(np.uint8)*255
 alpha = cv2.erode(alpha, np.ones((3,3), np.uint8)); alpha = cv2.GaussianBlur(alpha, (0,0), 1.0)
 ys, xs = np.where(alpha > 128)
@@ -37,7 +38,7 @@ base = int(E_('BASE', 800)); px = (W-pw)//2 + int(E_('DX', 0)); py = base-ph
 # scene stats (table/wall) -> partial colour transfer
 reg = bga[300:900, 200:1300].reshape(-1, 3); mu, sd = reg.mean(0), reg.std(0)
 pm = rgb[al > 128].mean(0); ps = rgb[al > 128].std(0)
-rgb = rgb + 0.35*(((rgb-pm)/ps*sd + mu) - rgb)
+rgb = rgb + float(E_('CT', 0.35))*(((rgb-pm)/ps*sd + mu) - rgb)
 rgb *= np.array([1.0, 0.95, 0.86]); rgb = rgb*0.90 + 14
 # window-light gradient (brighter right/top), warm wood bounce at the bottom
 yy = np.linspace(0, 1, ph)[:, None, None]; xx = np.linspace(0, 1, pw)[None, :, None]
@@ -79,7 +80,7 @@ canvas = Image.fromarray(np.clip(canvas, 0, 255).astype(np.uint8)).convert('RGBA
 # caption on top: stretched, ragged ink-brush calligraphy (flat red, flying-white streaks, jagged ends), no stamp, no English
 rng = np.random.default_rng(21)
 fpath = E_('FONT', '/home/user/secondshift/cny27/work/fonts/MaShanZheng-Regular.ttf')
-size = int(E_('CAP_SZ', 235)); txt = '喜气羊羊'; f = ImageFont.truetype(fpath, size)
+size = int(E_('CAP_SZ', 235)); txt = E_('CAP_TXT', '喜气羊羊'); f = ImageFont.truetype(fpath, size)
 SX = float(E_('SX', 0.95)); SY = float(E_('SY', 1.3))
 ty = int(E_('CAP_Y', 8)); cx = W/2 + int(E_('CAP_DX', 0)); step = size*float(E_('CAP_STEP', 1.0))
 col = np.array([int(v) for v in E_('CAP_COL', '188,18,26').split(',')], np.float32)
