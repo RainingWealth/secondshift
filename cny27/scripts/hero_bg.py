@@ -76,46 +76,48 @@ over(rgb, al, px, py)
 ao = cv2.GaussianBlur(fm, (0, 0), 2.5)*0.35
 canvas = canvas*(1-ao[..., None]) + np.array([40, 20, 8])*ao[..., None]
 canvas = Image.fromarray(np.clip(canvas, 0, 255).astype(np.uint8)).convert('RGBA')
-# caption on top: festive brush lettering, bounced/tilted, gold gradient + crimson outline + glow
+# caption on top: raw ink-brush lettering (flat colour, dry-brush edges), small English sub-line, red seal
+rng = np.random.default_rng(11)
 fpath = E_('FONT', '/home/user/secondshift/cny27/work/fonts/MaShanZheng-Regular.ttf')
-size = int(E_('CAP_SZ', 190)); txt = '喜气羊羊'
-f = ImageFont.truetype(fpath, size)
-ty = int(E_('CAP_Y', 20)); cx = W/2 + int(E_('CAP_DX', 0))
-tilts = [0, 0, 0, 0]; dys = [0, 0, 0, 0]; scl = [1.0, 1.0, 1.0, 1.0]
-step = size*0.80; n = len(txt); x_start = cx - step*(n-1)/2
-glyphs = []
-for i, ch in enumerate(txt):
-    g = Image.new('L', (size*2, size*2), 0); gd = ImageDraw.Draw(g)
-    bb = gd.textbbox((0, 0), ch, font=f); gd.text((size-(bb[0]+bb[2])/2, size-(bb[1]+bb[3])/2), ch, font=f, fill=255)
-    g = g.resize((int(g.width*scl[i]), int(g.height*scl[i])), Image.LANCZOS).rotate(tilts[i], resample=Image.BICUBIC, expand=False)
-    glyphs.append((g, int(x_start+i*step), ty+size//2+dys[i]))
-mask = Image.new('L', (W, H), 0)
-for g, gx, gy in glyphs:
-    mask.paste(255, (gx-g.width//2, gy-g.height//2), g)
-m = np.array(mask)
-# gold gradient fill (bright top -> deep gold bottom) with a highlight band
-ys_, xs_ = np.where(m > 0); y0_, y1_ = ys_.min(), ys_.max()
-t = np.clip((np.arange(H)-y0_)/(y1_-y0_), 0, 1)[:, None, None]
-gold = (1-t)*np.array([255, 238, 150]) + t*np.array([222, 150, 30])
-gold = np.broadcast_to(gold, (H, W, 3)).astype(np.float32)
-band = np.exp(-((t-0.38)/0.07)**2)*60; gold = np.clip(gold+band, 0, 255)
-sm = np.array(mask).astype(np.float32)/255
-red = cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17)))   # crimson outline
-gl = cv2.GaussianBlur(cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (41, 41))).astype(np.float32)/255, (0, 0), 14)
+size = int(E_('CAP_SZ', 250)); txt = '喜气羊羊'; f = ImageFont.truetype(fpath, size)
+ty = int(E_('CAP_Y', 20)); cx = W/2 + int(E_('CAP_DX', 0)); step = size*float(E_('CAP_STEP', 0.78))
+cols_ = [(176, 18, 28), (158, 106, 22), (176, 18, 28), (158, 106, 22)] if E_('CAP_MIX', '1') == '1' else [(176, 18, 28)]*4
 cv = np.array(canvas.convert('RGB')).astype(np.float32)
-sd = cv2.GaussianBlur(np.roll(np.roll(red, 10, 0), 8, 1).astype(np.float32)/255, (0, 0), 7)[..., None]*0.65
-cv = cv*(1-sd) + np.array([50, 8, 8])*sd                                      # drop shadow
-cv = cv + gl[..., None]*np.array([255, 190, 70])*0.55                          # warm glow
-ra = (cv2.GaussianBlur(red.astype(np.float32)/255, (0, 0), 0.8))[..., None]
-cv = cv*(1-ra) + np.array([172, 14, 24])*ra                                    # outline
-inner = cv2.erode(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
-gm = cv2.GaussianBlur(inner.astype(np.float32)/255, (0, 0), 0.8)[..., None]
-cv = cv*(1-gm) + gold*gm
-cv = np.clip(cv, 0, 255)
-canvas = Image.fromarray(cv.astype(np.uint8)).convert('RGBA')
-# sparkles
+def dry(mask):
+    mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (int(E_('BOLD', 9)),)*2))   # thicken strokes like the reference
+    m = mask.astype(np.float32)/255
+    nz = cv2.GaussianBlur(rng.normal(0, 1, m.shape).astype(np.float32), (0, 0), 2.2)       # ragged edge
+    mr = cv2.GaussianBlur(m, (0, 0), 1.2) + nz*0.35*(1-np.abs(2*cv2.GaussianBlur(m, (0, 0), 3)-1)) 
+    m2 = np.clip((mr-0.5)*6+0.5, 0, 1)
+    st = cv2.GaussianBlur(rng.normal(0, 1, m.shape).astype(np.float32), (0, 0), 1.0)
+    st = cv2.blur(st, (41, 1)); st = (st-st.mean())/st.std()                             # horizontal bristle streaks
+    edge = np.clip(m2 - cv2.erode(m2, np.ones((9, 9), np.uint8)), 0, 1)
+    edge = cv2.GaussianBlur(edge, (0, 0), 3); edge = np.clip(edge*2.2, 0, 1)
+    return np.clip(m2*(1-edge*np.clip(st*0.55-0.05, 0, 1)), 0, 1)
+x_start = cx - step*(len(txt)-1)/2; ink_all = np.zeros((H, W), np.float32)
+for i, ch in enumerate(txt):
+    g = Image.new('L', (W, H), 0); gd = ImageDraw.Draw(g)
+    bb = gd.textbbox((0, 0), ch, font=f)
+    gd.text((x_start+i*step-(bb[0]+bb[2])/2, ty+size/2-(bb[1]+bb[3])/2), ch, font=f, fill=255)
+    gm = dry(np.array(g))
+    # soft wall shadow, then flat ink with slight tonal variation
+    sdw = cv2.GaussianBlur(np.roll(np.roll(gm, 5, 0), 4, 1), (0, 0), 5)[..., None]*0.35
+    cv = cv*(1-sdw) + np.array([60, 30, 20])*sdw
+    tone = 1 + cv2.GaussianBlur(rng.normal(0, 1, (H, W)).astype(np.float32), (0, 0), 14)[..., None]*0.10
+    cv = cv*(1-gm[..., None]) + (np.array(cols_[i], np.float32)*tone)*gm[..., None]
+canvas = Image.fromarray(np.clip(cv, 0, 255).astype(np.uint8)).convert('RGBA')
 dr = ImageDraw.Draw(canvas)
-for (sx, sy, r) in [(cx-step*1.9, ty+40, 22), (cx+step*1.9, ty+30, 26), (cx+step*1.2, ty+size*0.95, 14), (cx-step*1.2, ty+size*0.9, 16)]:
-    dr.polygon([(sx, sy-r), (sx+r*0.22, sy-r*0.22), (sx+r, sy), (sx+r*0.22, sy+r*0.22), (sx, sy+r), (sx-r*0.22, sy+r*0.22), (sx-r, sy), (sx-r*0.22, sy-r*0.22)], fill=(255, 244, 190))
+sub = E_('CAP_SUB', 'GOOD  LUCK  ·  YEAR OF THE GOAT 2027')
+try: sf = ImageFont.truetype('/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf', 26)
+except Exception: sf = ImageFont.load_default()
+tr = 7; wsum = sum(dr.textlength(c, font=sf)+tr for c in sub)-tr
+sx = cx-wsum/2; sy = ty+size*float(E_('SUB_Y', 1.0))
+for c in sub:
+    dr.text((sx, sy), c, font=sf, fill=(120, 20, 24)); sx += dr.textlength(c, font=sf)+tr
+# red seal
+sz_ = 54; sxp = cx+step*1.95; syp = ty+size*0.18
+dr.rounded_rectangle([sxp, syp, sxp+sz_, syp+sz_], radius=6, fill=(176, 18, 28))
+sealf = ImageFont.truetype('/home/user/secondshift/cny27/work/fonts/MaShanZheng-Regular.ttf', 44)
+bb = dr.textbbox((0, 0), '羊', font=sealf); dr.text((sxp+sz_/2-(bb[0]+bb[2])/2, syp+sz_/2-(bb[1]+bb[3])/2), '羊', font=sealf, fill=(250, 236, 205))
 canvas.convert('RGB').save(out, quality=92)
 print((pw, ph), (px, py))
