@@ -92,7 +92,7 @@ nh = noise(1.2, (71, 1)); nv = noise(1.2, (1, 71)); ni = noise(3.0)
 def ink(mask):
     m0 = (mask > 128).astype(np.float32)
     m0 = cv2.dilate(m0, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (int(E_('BOLD', 13)),)*2))
-    m0 = cv2.dilate(m0, cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3)))   # horizontals heavier than verticals
+    m0 = cv2.dilate(m0, cv2.getStructuringElement(cv2.MORPH_RECT, tuple(int(v) for v in E_('HD', '15,3').split(','))))   # horizontals heavier than verticals
     sm = cv2.GaussianBlur(m0, (0, 0), 5)
     gy = cv2.Sobel(sm, cv2.CV_32F, 0, 1, ksize=5); gx = cv2.Sobel(sm, cv2.CV_32F, 1, 0, ksize=5)
     wh = np.abs(gy)/(np.abs(gx)+np.abs(gy)+1e-6)                       # 1 where the edge is a horizontal stroke edge
@@ -100,7 +100,7 @@ def ink(mask):
     streak = wh*nh + (1-wh)*nv                                          # bristle streaks run along the stroke
     edge = np.clip(cv2.GaussianBlur(m0, (0, 0), 2) - cv2.GaussianBlur(m0, (0, 0), 10) + 0.5, 0, 1)
     near = np.clip(1-np.abs(2*cv2.GaussianBlur(m0, (0, 0), 6)-1), 0, 1)  # 1 near a stroke edge
-    body = cv2.GaussianBlur(m0, (0, 0), 1.0) + 0.55*ni*near + 0.35*streak*near   # jagged, streak-driven edge
+    body = cv2.GaussianBlur(m0, (0, 0), 1.0) + float(E_('RAG', 0.55))*ni*near + float(E_('RAG2', 0.35))*streak*near   # jagged, streak-driven edge
     shape = np.clip((body-0.5)*5+0.5, 0, 1)
     tail = cv2.dilate(m0, cv2.getStructuringElement(cv2.MORPH_RECT, (110, 3))) + cv2.dilate(m0, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 55)))
     tail = (tail > 0) & (m0 < 0.5) & (streak*near > 0.62)               # flying-white tails off stroke ends
@@ -109,9 +109,11 @@ def ink(mask):
     return np.clip(shape, 0, 1)
 x_start = cx - step*(len(txt)-1)/2
 M = Image.new('L', (W, H), 0)
+f0 = ImageFont.truetype(E_('FONT0'), size) if E_('FONT0') else f
 for i, ch in enumerate(txt):
     gl = Image.new('L', (size*2, size*2), 0); gd = ImageDraw.Draw(gl)
-    bb = gd.textbbox((0, 0), ch, font=f); gd.text((size-(bb[0]+bb[2])/2, size-(bb[1]+bb[3])/2), ch, font=f, fill=255)
+    ff = f0 if i == 0 else f
+    bb = gd.textbbox((0, 0), ch, font=ff); gd.text((size-(bb[0]+bb[2])/2, size-(bb[1]+bb[3])/2), ch, font=ff, fill=255)
     gl = gl.resize((int(gl.width*SX), int(gl.height*SY)), Image.LANCZOS)
     M.paste(255, (int(x_start+i*step-gl.width/2), int(ty+size*SY/2-gl.height/2)), gl)
 gm = ink(np.array(M))
