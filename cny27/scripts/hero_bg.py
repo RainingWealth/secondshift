@@ -76,58 +76,51 @@ over(rgb, al, px, py)
 ao = cv2.GaussianBlur(fm, (0, 0), 2.5)*0.35
 canvas = canvas*(1-ao[..., None]) + np.array([40, 20, 8])*ao[..., None]
 canvas = Image.fromarray(np.clip(canvas, 0, 255).astype(np.uint8)).convert('RGBA')
-# caption on top: raw ink-brush lettering (flat colour, dry-brush edges), small English sub-line, red seal
-rng = np.random.default_rng(11)
+# caption on top: stretched, ragged ink-brush calligraphy (flat red, flying-white streaks, jagged ends), no stamp, no English
+rng = np.random.default_rng(21)
 fpath = E_('FONT', '/home/user/secondshift/cny27/work/fonts/MaShanZheng-Regular.ttf')
-size = int(E_('CAP_SZ', 250)); txt = '喜气羊羊'; f = ImageFont.truetype(fpath, size)
-ty = int(E_('CAP_Y', 20)); cx = W/2 + int(E_('CAP_DX', 0)); step = size*float(E_('CAP_STEP', 0.78))
-cols_ = [tuple(int(v) for v in E_('CAP_COL', '196,16,28').split(','))]*4
+size = int(E_('CAP_SZ', 235)); txt = '喜气羊羊'; f = ImageFont.truetype(fpath, size)
+SX = float(E_('SX', 0.95)); SY = float(E_('SY', 1.3))
+ty = int(E_('CAP_Y', 8)); cx = W/2 + int(E_('CAP_DX', 0)); step = size*float(E_('CAP_STEP', 1.0))
+col = np.array([int(v) for v in E_('CAP_COL', '188,18,26').split(',')], np.float32)
 cv = np.array(canvas.convert('RGB')).astype(np.float32)
-def dry(mask):
-    mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (int(E_('BOLD', 9)),)*2))   # thicken strokes like the reference
-    m = mask.astype(np.float32)/255
-    nz = cv2.GaussianBlur(rng.normal(0, 1, m.shape).astype(np.float32), (0, 0), 2.2)       # ragged edge
-    mr = cv2.GaussianBlur(m, (0, 0), 1.2) + nz*0.35*(1-np.abs(2*cv2.GaussianBlur(m, (0, 0), 3)-1)) 
-    m2 = np.clip((mr-0.5)*6+0.5, 0, 1)
-    st = cv2.GaussianBlur(rng.normal(0, 1, m.shape).astype(np.float32), (0, 0), 1.0)
-    st = cv2.blur(st, (41, 1)); st = (st-st.mean())/st.std()                             # horizontal bristle streaks
-    edge = np.clip(m2 - cv2.erode(m2, np.ones((9, 9), np.uint8)), 0, 1)
-    edge = cv2.GaussianBlur(edge, (0, 0), 3); edge = np.clip(edge*2.2, 0, 1)
-    return np.clip(m2*(1-edge*np.clip(st*0.55-0.05, 0, 1))*(1-float(E_('INT', 0.55))*np.clip(st*0.9-0.7, 0, 1)), 0, 1)
-x_start = cx - step*(len(txt)-1)/2; ink_all = np.zeros((H, W), np.float32)
+def noise(sig, ks=None):
+    n = rng.normal(0, 1, (H, W)).astype(np.float32)
+    n = cv2.GaussianBlur(n, (0, 0), sig) if ks is None else cv2.blur(cv2.GaussianBlur(n, (0, 0), sig), ks)
+    return (n-n.mean())/n.std()
+nh = noise(1.2, (71, 1)); nv = noise(1.2, (1, 71)); ni = noise(3.0)
+def ink(mask):
+    m0 = (mask > 128).astype(np.float32)
+    m0 = cv2.dilate(m0, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (int(E_('BOLD', 13)),)*2))
+    m0 = cv2.dilate(m0, cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3)))   # horizontals heavier than verticals
+    sm = cv2.GaussianBlur(m0, (0, 0), 5)
+    gy = cv2.Sobel(sm, cv2.CV_32F, 0, 1, ksize=5); gx = cv2.Sobel(sm, cv2.CV_32F, 1, 0, ksize=5)
+    wh = np.abs(gy)/(np.abs(gx)+np.abs(gy)+1e-6)                       # 1 where the edge is a horizontal stroke edge
+    wh = cv2.GaussianBlur(wh, (0, 0), 4)
+    streak = wh*nh + (1-wh)*nv                                          # bristle streaks run along the stroke
+    edge = np.clip(cv2.GaussianBlur(m0, (0, 0), 2) - cv2.GaussianBlur(m0, (0, 0), 10) + 0.5, 0, 1)
+    near = np.clip(1-np.abs(2*cv2.GaussianBlur(m0, (0, 0), 6)-1), 0, 1)  # 1 near a stroke edge
+    body = cv2.GaussianBlur(m0, (0, 0), 1.0) + 0.55*ni*near + 0.35*streak*near   # jagged, streak-driven edge
+    shape = np.clip((body-0.5)*5+0.5, 0, 1)
+    tail = cv2.dilate(m0, cv2.getStructuringElement(cv2.MORPH_RECT, (110, 3))) + cv2.dilate(m0, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 55)))
+    tail = (tail > 0) & (m0 < 0.5) & (streak*near > 0.62)               # flying-white tails off stroke ends
+    shape = np.maximum(shape, cv2.GaussianBlur(tail.astype(np.float32), (0, 0), 0.8)*0.9)
+    shape *= 1-float(E_('INT', 0.5))*np.clip(streak*0.9-0.9, 0, 1)*(1-near*0.3)   # dry gaps inside the strokes
+    return np.clip(shape, 0, 1)
+x_start = cx - step*(len(txt)-1)/2
+M = Image.new('L', (W, H), 0)
 for i, ch in enumerate(txt):
-    g = Image.new('L', (W, H), 0); gd = ImageDraw.Draw(g)
-    bb = gd.textbbox((0, 0), ch, font=f)
-    gd.text((x_start+i*step-(bb[0]+bb[2])/2, ty+size/2-(bb[1]+bb[3])/2), ch, font=f, fill=255)
-    gm = dry(np.array(g)); g0 = np.array(g) > 128
-    near = cv2.dilate(g0.astype(np.uint8), np.ones((int(size*0.35),)*2, np.uint8)) & (1-cv2.dilate(g0.astype(np.uint8), np.ones((11, 11), np.uint8)))
-    yy_, xx_ = np.where(near > 0); sp = np.zeros((H, W), np.uint8)
-    if len(yy_) and int(E_('SPL', 0)) > 0:
-        for k in rng.choice(len(yy_), int(E_('SPL', 0)), replace=False):
-            cv2.circle(sp, (int(xx_[k]), int(yy_[k])), int(rng.choice([1, 2, 2, 3, 4])), 255, -1)
-    gm = np.maximum(gm, cv2.GaussianBlur(sp.astype(np.float32)/255, (0, 0), 0.7))
-    rim = np.clip(cv2.GaussianBlur(g0.astype(np.float32), (0, 0), 1.5) - cv2.GaussianBlur(g0.astype(np.float32), (0, 0), 5), 0, 1)
-    # soft wall shadow, then flat ink with slight tonal variation
-    sdw = cv2.GaussianBlur(np.roll(np.roll(gm, 5, 0), 4, 1), (0, 0), 5)[..., None]*0.35
-    cv = cv*(1-sdw) + np.array([60, 30, 20])*sdw
-    tone = 1 + cv2.GaussianBlur(rng.normal(0, 1, (H, W)).astype(np.float32), (0, 0), 14)[..., None]*0.10
-    inkc = np.array(cols_[i], np.float32)*tone*(1-0.22*rim[..., None])
-    cv = cv*(1-gm[..., None]) + inkc*gm[..., None]
+    gl = Image.new('L', (size*2, size*2), 0); gd = ImageDraw.Draw(gl)
+    bb = gd.textbbox((0, 0), ch, font=f); gd.text((size-(bb[0]+bb[2])/2, size-(bb[1]+bb[3])/2), ch, font=f, fill=255)
+    gl = gl.resize((int(gl.width*SX), int(gl.height*SY)), Image.LANCZOS)
+    M.paste(255, (int(x_start+i*step-gl.width/2), int(ty+size*SY/2-gl.height/2)), gl)
+gm = ink(np.array(M))
+sdw = cv2.GaussianBlur(np.roll(np.roll(gm, 6, 0), 5, 1), (0, 0), 6)[..., None]*0.35
+cv = cv*(1-sdw) + np.array([60, 30, 20])*sdw
+tone = 1 + cv2.GaussianBlur(rng.normal(0, 1, (H, W)).astype(np.float32), (0, 0), 14)[..., None]*0.10
+dark = np.clip(cv2.GaussianBlur(gm, (0, 0), 2)-cv2.GaussianBlur(gm, (0, 0), 7), 0, 1)[..., None]   # wet-ink pooling at the edge
+inkc = col*tone*(1-0.25*dark)
+cv = cv*(1-gm[..., None]) + inkc*gm[..., None]
 canvas = Image.fromarray(np.clip(cv, 0, 255).astype(np.uint8)).convert('RGBA')
-dr = ImageDraw.Draw(canvas)
-sub = E_('CAP_SUB', '')
-try: sf = ImageFont.truetype('/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf', 26)
-except Exception: sf = ImageFont.load_default()
-tr = 7
-wsum = 0
-wsum = sum(dr.textlength(c, font=sf)+tr for c in sub)-tr
-sx = cx-wsum/2; sy = ty+size*float(E_('SUB_Y', 1.0))
-for c in sub:
-    dr.text((sx, sy), c, font=sf, fill=(120, 20, 24)); sx += dr.textlength(c, font=sf)+tr
-# red seal
-sz_ = 54; sxp = cx+step*1.95; syp = ty+size*0.18
-dr.rounded_rectangle([sxp, syp, sxp+sz_, syp+sz_], radius=6, fill=(176, 18, 28))
-sealf = ImageFont.truetype('/home/user/secondshift/cny27/work/fonts/MaShanZheng-Regular.ttf', 44)
-bb = dr.textbbox((0, 0), '羊', font=sealf); dr.text((sxp+sz_/2-(bb[0]+bb[2])/2, syp+sz_/2-(bb[1]+bb[3])/2), '羊', font=sealf, fill=(250, 236, 205))
 canvas.convert('RGB').save(out, quality=92)
 print((pw, ph), (px, py))
