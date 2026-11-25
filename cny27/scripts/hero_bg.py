@@ -81,7 +81,7 @@ rng = np.random.default_rng(11)
 fpath = E_('FONT', '/home/user/secondshift/cny27/work/fonts/MaShanZheng-Regular.ttf')
 size = int(E_('CAP_SZ', 250)); txt = '喜气羊羊'; f = ImageFont.truetype(fpath, size)
 ty = int(E_('CAP_Y', 20)); cx = W/2 + int(E_('CAP_DX', 0)); step = size*float(E_('CAP_STEP', 0.78))
-cols_ = [(200, 20, 30), (24, 122, 70), (238, 112, 8), (200, 20, 30)] if E_('CAP_MIX', '1') == '1' else [(200, 20, 30)]*4
+cols_ = [tuple(int(v) for v in E_('CAP_COL', '196,16,28').split(','))]*4
 cv = np.array(canvas.convert('RGB')).astype(np.float32)
 def dry(mask):
     mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (int(E_('BOLD', 9)),)*2))   # thicken strokes like the reference
@@ -93,7 +93,7 @@ def dry(mask):
     st = cv2.blur(st, (41, 1)); st = (st-st.mean())/st.std()                             # horizontal bristle streaks
     edge = np.clip(m2 - cv2.erode(m2, np.ones((9, 9), np.uint8)), 0, 1)
     edge = cv2.GaussianBlur(edge, (0, 0), 3); edge = np.clip(edge*2.2, 0, 1)
-    return np.clip(m2*(1-edge*np.clip(st*0.55-0.05, 0, 1)), 0, 1)
+    return np.clip(m2*(1-edge*np.clip(st*0.55-0.05, 0, 1))*(1-float(E_('INT', 0.55))*np.clip(st*0.9-0.7, 0, 1)), 0, 1)
 x_start = cx - step*(len(txt)-1)/2; ink_all = np.zeros((H, W), np.float32)
 for i, ch in enumerate(txt):
     g = Image.new('L', (W, H), 0); gd = ImageDraw.Draw(g)
@@ -102,8 +102,8 @@ for i, ch in enumerate(txt):
     gm = dry(np.array(g)); g0 = np.array(g) > 128
     near = cv2.dilate(g0.astype(np.uint8), np.ones((int(size*0.35),)*2, np.uint8)) & (1-cv2.dilate(g0.astype(np.uint8), np.ones((11, 11), np.uint8)))
     yy_, xx_ = np.where(near > 0); sp = np.zeros((H, W), np.uint8)
-    if len(yy_):
-        for k in rng.choice(len(yy_), 16, replace=False):
+    if len(yy_) and int(E_('SPL', 0)) > 0:
+        for k in rng.choice(len(yy_), int(E_('SPL', 0)), replace=False):
             cv2.circle(sp, (int(xx_[k]), int(yy_[k])), int(rng.choice([1, 2, 2, 3, 4])), 255, -1)
     gm = np.maximum(gm, cv2.GaussianBlur(sp.astype(np.float32)/255, (0, 0), 0.7))
     rim = np.clip(cv2.GaussianBlur(g0.astype(np.float32), (0, 0), 1.5) - cv2.GaussianBlur(g0.astype(np.float32), (0, 0), 5), 0, 1)
@@ -115,10 +115,12 @@ for i, ch in enumerate(txt):
     cv = cv*(1-gm[..., None]) + inkc*gm[..., None]
 canvas = Image.fromarray(np.clip(cv, 0, 255).astype(np.uint8)).convert('RGBA')
 dr = ImageDraw.Draw(canvas)
-sub = E_('CAP_SUB', 'GOOD  LUCK  ·  YEAR OF THE GOAT 2027')
+sub = E_('CAP_SUB', '')
 try: sf = ImageFont.truetype('/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf', 26)
 except Exception: sf = ImageFont.load_default()
-tr = 7; wsum = sum(dr.textlength(c, font=sf)+tr for c in sub)-tr
+tr = 7
+wsum = 0
+wsum = sum(dr.textlength(c, font=sf)+tr for c in sub)-tr
 sx = cx-wsum/2; sy = ty+size*float(E_('SUB_Y', 1.0))
 for c in sub:
     dr.text((sx, sy), c, font=sf, fill=(120, 20, 24)); sx += dr.textlength(c, font=sf)+tr
