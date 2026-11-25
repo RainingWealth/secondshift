@@ -28,8 +28,9 @@ if float(E_('TILT', 0)): h = h.rotate(float(E_('TILT', 0)), resample=Image.BICUB
 a = np.array(h).astype(np.float32); al = a[..., 3]; rgb = a[..., :3]
 # blend into the scene: warm/crimson grade, haze toward the wall, softer contrast, depth blur
 wall = bg[250:420, 300:1250].reshape(-1, 3).mean(0)
-rgb = rgb*np.array([1.0, 0.88, 0.84]); rgb = rgb*0.88 + 12
-rgb = rgb*(1-0.18) + wall*0.18
+tint = np.array([float(v) for v in E_('TINT', '1.0,0.88,0.84').split(',')]); ctr = float(E_('CTR', 0.88)); hz = float(E_('HAZE', 0.18))
+rgb = rgb*tint; rgb = rgb*ctr + 12
+rgb = rgb*(1-hz) + wall*hz
 rgb = cv2.GaussianBlur(rgb, (0, 0), float(E_('BLUR', 1.8))); al = cv2.GaussianBlur(al, (0, 0), float(E_('BLUR', 1.8))*0.7)
 rgb += rng.normal(0, 2.0, rgb.shape)
 ys, xs = np.where(al > 128); low_y, low_x = ys.max(), xs[ys.argmax()]
