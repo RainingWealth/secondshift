@@ -81,7 +81,7 @@ fpath = E_('FONT', '/home/user/secondshift/cny27/work/fonts/MaShanZheng-Regular.
 size = int(E_('CAP_SZ', 190)); txt = '喜气羊羊'
 f = ImageFont.truetype(fpath, size)
 ty = int(E_('CAP_Y', 20)); cx = W/2 + int(E_('CAP_DX', 0))
-tilts = [-7, 5, -4, 8]; dys = [10, -14, 4, -8]; scl = [1.05, 0.95, 1.0, 1.08]
+tilts = [0, 0, 0, 0]; dys = [0, 0, 0, 0]; scl = [1.0, 1.0, 1.0, 1.0]
 step = size*0.80; n = len(txt); x_start = cx - step*(n-1)/2
 glyphs = []
 for i, ch in enumerate(txt):
