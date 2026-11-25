@@ -22,13 +22,16 @@ if E_('TABLE'):
     mf = cv2.GaussianBlur(mk.astype(np.float32)/255, (0, 0), 6)[..., None]
     b = (b.astype(np.float32)*(1-mf) + ip*mf).clip(0, 255).astype(np.uint8); bg = Image.fromarray(b)
 bga = np.array(bg).astype(np.float32)
-im = np.array(Image.open(src).convert('RGB'))
+PNG = src.lower().endswith('.png')
+arrp = np.array(Image.open(src).convert('RGBA'))
+im = arrp[..., :3].copy() if PNG else np.array(Image.open(src).convert('RGB'))
 white = (im.min(2) > 242).astype(np.uint8); bgmask = np.zeros_like(white)
 for p in [(0,0),(im.shape[1]-1,0),(0,im.shape[0]-1),(im.shape[1]-1,im.shape[0]-1)]:
     t = white.copy(); mm = np.zeros((im.shape[0]+2, im.shape[1]+2), np.uint8); cv2.floodFill(t, mm, p, 2, flags=4)
     bgmask |= (t == 2).astype(np.uint8)
 if E_('ALLWHITE'): bgmask = white
 alpha = (1-bgmask).astype(np.uint8)*255
+if PNG: alpha = arrp[..., 3].copy()
 alpha = cv2.erode(alpha, np.ones((3,3), np.uint8)); alpha = cv2.GaussianBlur(alpha, (0,0), 1.0)
 ys, xs = np.where(alpha > 128)
 rgb = im[ys.min():ys.max()+1, xs.min():xs.max()+1].astype(np.float32); al = alpha[ys.min():ys.max()+1, xs.min():xs.max()+1]
